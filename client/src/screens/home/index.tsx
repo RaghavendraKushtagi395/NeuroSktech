@@ -130,8 +130,6 @@ export default function Home() {
       });
 
       toast.success('Analysis completed!');
-    } catch (error: unknown) {
-      toast.error(error.message || 'Analysis failed');
     } finally {
       setIsProcessing(false);
     }
@@ -200,7 +198,7 @@ export default function Home() {
               onClick={() => setIsErasing(true)} // Set eraser mode
               className="flex items-center p-4 hover:ring-4 hover:ring-blue-800"
             >
-              <FaEraser className="text-white" size={20} />
+              <FaEraser className="text-white" size={28} />
             </Button>
           </div>
 
@@ -216,7 +214,7 @@ export default function Home() {
 
       <canvas
         ref={canvasRef}
-        className="mt-20 mx-4 mb-4 rounded-xl shadow-2xl bg-gray-800"
+        className="mt-20 rounded-xl shadow-2xl bg-gray-800"
         style={{
           cursor: 'crosshair',
           border: '2px solid rgba(255, 255, 255, 0.1)'
@@ -242,13 +240,13 @@ export default function Home() {
         </Draggable>
       ))}
 
-      <div className="fixed bottom-10 left-10 bg-gray-800 p-4 rounded-lg shadow-lg text-white">
+      <div className="fixed top-24 right-28 bg-gray-800 p-4 rounded-lg shadow-lg text-white">
         <h3 className="text-lg font-semibold">Analysis Results</h3>
         {results.length > 0 ? (
           <ul>
             {results.map((result, index) => (
-              <li key={index} className="mb-2">
-                <span className="font-bold">{result.expr}:</span> {result.result}
+              <li key={index} className="mb-2 text-5xl">
+                <span className="font-semibold ">{result.expr} =</span> <span className='font-bold text-green-400'>{result.result}</span>
               </li>
             ))}
           </ul>
