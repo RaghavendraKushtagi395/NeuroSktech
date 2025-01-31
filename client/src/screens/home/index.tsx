@@ -7,6 +7,9 @@ import { SWATCHES } from '@/constants';
 import { toast } from 'react-hot-toast';
 import { cn } from "@/lib/utils";
 import { FaPen, FaEraser } from 'react-icons/fa'; // Added eraser and pen icons
+import LOGO from '@/assets/logo.png'
+import { Link } from 'react-router-dom';
+import Footer from '../footer/Footer';
 
 interface AnalysisResult {
   expr: string;
@@ -162,10 +165,17 @@ export default function Home() {
   return (
     <div className="relative h-screen bg-gray-900 overflow-hidden">
       <LoadingOverlay visible={isProcessing} loaderProps={{ type: 'dots' }} />
-
+     
       <div className="fixed top-0 left-0 right-0 bg-gray-800 p-4 z-50 shadow-xl">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <div className="flex gap-4">
+      <Link to={'/'}>
+        <img 
+      src={LOGO} 
+      className="h-14 rounded-full " // Increased size & added margin
+      alt="Logo"
+    />
+      </Link>
+          <div className="flex gap-6">
             <Button onClick={resetCanvas} variant="destructive" className="shadow-lg">
               New Canvas
             </Button>
@@ -214,7 +224,7 @@ export default function Home() {
 
       <canvas
         ref={canvasRef}
-        className="mt-20 rounded-xl shadow-2xl bg-gray-800"
+        className="mt-24 rounded-xl shadow-2xl bg-gray-800"
         style={{
           cursor: 'crosshair',
           border: '2px solid rgba(255, 255, 255, 0.1)'
@@ -240,7 +250,9 @@ export default function Home() {
         </Draggable>
       ))}
 
-      <div className="fixed top-24 right-28 bg-gray-800 p-4 rounded-lg shadow-lg text-white">
+<Draggable bounds="parent">
+
+      <div className="fixed top-28 right-28 bg-gray-800 p-4 rounded-lg shadow-lg text-white hover:cursor-move z-40">
         <h3 className="text-lg font-semibold">Analysis Results</h3>
         {results.length > 0 ? (
           <ul>
@@ -254,6 +266,8 @@ export default function Home() {
           <p>No results available.</p>
         )}
       </div>
+</Draggable>
+<Footer/>
     </div>
   );
 }

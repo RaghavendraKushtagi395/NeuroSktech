@@ -4,15 +4,21 @@ import { MantineProvider } from '@mantine/core';
 import { Toaster } from 'react-hot-toast';
 
 import Home from '@/screens/home/index.tsx';
-
+import Landing from '@/screens/landing/LandingPage.tsx';
 import '@/index.css';
 
 const paths = [
     {
-        path: '/',
+        path: '/e-board',
         element: (
           <Home/>
         ),
+    },
+    {
+      path: '/',
+      element: (
+        <Landing/>
+      ),
     },
 ];
 
