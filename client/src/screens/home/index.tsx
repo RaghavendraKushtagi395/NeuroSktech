@@ -1,223 +1,261 @@
-import { ColorSwatch, Group } from '@mantine/core';
+import { ColorSwatch, Group, LoadingOverlay } from '@mantine/core';
 import { Button } from '@/components/ui/button';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import Draggable from 'react-draggable';
 import { SWATCHES } from '@/constants';
+import { toast } from 'react-hot-toast';
+import { cn } from "@/lib/utils";
+import { FaPen, FaEraser } from 'react-icons/fa'; // Added eraser and pen icons
 
-interface GeneratedResult {
-    expression: string;
-    answer: string;
-}
-
-interface Response {
-    expr: string;
-    result: string;
-    assign: boolean;
+interface AnalysisResult {
+  expr: string;
+  result: string;
+  assign: boolean;
 }
 
 export default function Home() {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [isDrawing, setIsDrawing] = useState(false);
-    const [color, setColor] = useState('rgb(255, 255, 255)');
-    const [reset, setReset] = useState(false);
-    const [dictOfVars, setDictOfVars] = useState({});
-    const [result, setResult] = useState<GeneratedResult>();
-    const [latexPosition, setLatexPosition] = useState({ x: 10, y: 200 });
-    const [latexExpression, setLatexExpression] = useState<Array<string>>([]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [color, setColor] = useState(SWATCHES[0]);
+  const [results, setResults] = useState<AnalysisResult[]>([]);
+  const [variables, setVariables] = useState<Record<string, string>>({});
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [latexNodes, setLatexNodes] = useState<Array<{ 
+    id: string; 
+    content: string; 
+    position: { x: number; y: number }
+  }>>([]);
+  const [isErasing, setIsErasing] = useState(false); // Added state for erasing mode
 
-    useEffect(() => {
-        if (latexExpression.length > 0 && window.MathJax) {
-            setTimeout(() => {
-                window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub]);
-            }, 0);
-        }
-    }, [latexExpression]);
+  useEffect(() => {
+    const initCanvas = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-    const renderLatexToCanvas = useCallback((expression: string, answer: string) => {
-        const latex = `\\(\\LARGE{${expression} = ${answer}}\\)`;
-        setLatexExpression((prevLatex) => [...prevLatex, latex]);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        if (result) {
-            renderLatexToCanvas(result.expression, result.answer);
-        }
-    }, [result, renderLatexToCanvas]);
-
-    useEffect(() => {
-        if (reset) {
-            resetCanvas();
-            setLatexExpression([]);
-            setResult(undefined);
-            setDictOfVars({});
-            setReset(false);
-        }
-    }, [reset]);
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight - canvas.offsetTop;
-                ctx.lineCap = 'round';
-                ctx.lineWidth = 3;
-            }
-        }
-
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_CHTML';
-        script.async = true;
-        document.head.appendChild(script);
-
-        script.onload = () => {
-            window.MathJax.Hub.Config({
-                tex2jax: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
-            });
-        };
-
-        return () => {
-            document.head.removeChild(script);
-        };
-    }, []);
-
-    const resetCanvas = () => {
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-        }
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - 100;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = color;
     };
 
-    const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        const canvas = canvasRef.current;
-        if (canvas) {
-            canvas.style.background = 'black';
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.beginPath();
-                ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-                setIsDrawing(true);
-            }
-        }
+    initCanvas();
+  }, []);
+
+  useEffect(() => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = color;
+    }
+  }, [color]);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_CHTML';
+    script.async = true;
+    document.head.appendChild(script);
+
+    return () => {
+      document.head.removeChild(script);
     };
+  }, []);
 
-    const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!isDrawing) return;
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const { offsetX, offsetY } = e.nativeEvent;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
 
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.strokeStyle = color;
-                ctx.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-                ctx.stroke();
-            }
-        }
-    };
+    ctx.beginPath();
+    ctx.moveTo(offsetX, offsetY);
+    setIsDrawing(true);
+  };
 
-    const stopDrawing = () => {
-        setIsDrawing(false);
-    };
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const { offsetX, offsetY } = e.nativeEvent;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
 
-    const runRoute = async () => {
-        const canvas = canvasRef.current;
+    if (isErasing) {
+      ctx.clearRect(offsetX - 10, offsetY - 10, 20, 20); // Eraser logic
+    } else {
+      ctx.lineTo(offsetX, offsetY);
+      ctx.stroke();
+    }
+  };
 
-        if (canvas) {
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/calculate`, {
-                image: canvas.toDataURL('image/png'),
-                dict_of_vars: dictOfVars,
-            });
+  const stopDrawing = () => setIsDrawing(false);
 
-            const resp = await response.data;
-            console.log('Response', resp);
+  const handleAnalysis = async () => {
+    try {
+      setIsProcessing(true);
+      const canvas = canvasRef.current;
+      if (!canvas) throw new Error('Canvas not available');
 
-            resp.data.forEach((data: Response) => {
-                if (data.assign) {
-                    setDictOfVars((prevDict) => ({
-                        ...prevDict,
-                        [data.expr]: data.result,
-                    }));
-                }
-            });
+      if (isCanvasEmpty(canvas)) {
+        toast.error('Please draw something first');
+        return;
+      }
 
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+      const { data } = await axios.post(`${import.meta.env.VITE_API_URL}/calculate`, {
+        image: canvas.toDataURL(),
+        dict_of_vars: variables
+      });
 
-                for (let y = 0; y < canvas.height; y++) {
-                    for (let x = 0; x < canvas.width; x++) {
-                        const i = (y * canvas.width + x) * 4;
-                        if (imageData.data[i + 3] > 0) {  // If pixel is not transparent
-                            minX = Math.min(minX, x);
-                            minY = Math.min(minY, y);
-                            maxX = Math.max(maxX, x);
-                            maxY = Math.max(maxY, y);
-                        }
-                    }
-                }
+      const newVariables = data.data
+        .filter((r: AnalysisResult) => r.assign)
+        .reduce((acc: Record<string, string>, curr: AnalysisResult) => ({
+          ...acc,
+          [curr.expr]: curr.result
+        }), {});
 
-                const centerX = (minX + maxX) / 2;
-                const centerY = (minY + maxY) / 2;
+      setVariables(prev => ({ ...prev, ...newVariables }));
+      setResults(data.data);
 
-                setLatexPosition({ x: centerX, y: centerY });
+      data.data.forEach((result: AnalysisResult) => {
+        const latex = `\\(\\color{white}${result.expr} = ${result.result}\\)`;
+        const position = calculateCanvasCenter();
+        setLatexNodes(prev => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            content: latex,
+            position
+          }
+        ]);
+      });
 
-                resp.data.forEach((data: Response) => {
-                    setTimeout(() => {
-                        setResult({
-                            expression: data.expr,
-                            answer: data.result,
-                        });
-                    }, 1000);
-                });
-            }
-        }
-    };
+      toast.success('Analysis completed!');
+    } catch (error: unknown) {
+      toast.error(error.message || 'Analysis failed');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-    return (
-        <>
-            <div className='grid grid-cols-3 gap-2'>
-                <Button onClick={() => setReset(true)} className='z-20 bg-black text-white'>
-                    Reset
-                </Button>
-                <Group className='z-20'>
-                    {SWATCHES.map((swatch) => (
-                        <ColorSwatch key={swatch} color={swatch} onClick={() => setColor(swatch)} />
-                    ))}
-                </Group>
-                <Button onClick={runRoute} className='z-20 bg-black text-white'>
-                    Run
-                </Button>
-            </div>
-            <canvas
-                ref={canvasRef}
-                className='absolute top-0 left-0 w-full h-full'
-                onMouseDown={startDrawing}
-                onMouseMove={draw}
-                onMouseUp={stopDrawing}
-                onMouseOut={stopDrawing}
+  const isCanvasEmpty = (canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return true;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return imageData.data.every(alpha => alpha === 0);
+  };
+
+  const calculateCanvasCenter = () => {
+    const canvas = canvasRef.current;
+    return canvas ? { x: canvas.width / 2, y: canvas.height / 2 } : { x: 0, y: 0 };
+  };
+
+  const resetCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (ctx && canvas) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setLatexNodes([]);
+      setVariables({});
+      setResults([]);
+      toast.success('Canvas reset');
+    }
+  };
+
+  return (
+    <div className="relative h-screen bg-gray-900 overflow-hidden">
+      <LoadingOverlay visible={isProcessing} loaderProps={{ type: 'dots' }} />
+
+      <div className="fixed top-0 left-0 right-0 bg-gray-800 p-4 z-50 shadow-xl">
+        <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <div className="flex gap-4">
+            <Button onClick={resetCanvas} variant="destructive" className="shadow-lg">
+              New Canvas
+            </Button>
+
+            <Group>
+              {SWATCHES.map((swatch) => (
+                <ColorSwatch
+                  key={swatch}
+                  color={swatch}
+                  onClick={() => setColor(swatch)}
+                  className={cn(
+                    'cursor-pointer transition-transform duration-200 hover:scale-110',
+                    color === swatch && 'ring-2 ring-offset-2 ring-white scale-125'
+                  )}
+                />
+              ))}
+            </Group>
+          </div>
+
+          <div className="flex gap-4 items-center">
+            <Button
+              
+              onClick={() => setIsErasing(false)} // Set pen mode
+              className="flex items-center p-4 hover:ring-4 hover:ring-blue-800"
+            >
+              <FaPen className="text-white" size={20} />
+            </Button>
+            <Button
+              
+              onClick={() => setIsErasing(true)} // Set eraser mode
+              className="flex items-center p-4 hover:ring-4 hover:ring-blue-800"
+            >
+              <FaEraser className="text-white" size={20} />
+            </Button>
+          </div>
+
+          <Button
+            onClick={handleAnalysis}
+            className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-lg font-semibold shadow-lg"
+            disabled={isProcessing}
+          >
+            {isProcessing ? 'Analyzing...' : 'Analyze'}
+          </Button>
+        </div>
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        className="mt-20 mx-4 mb-4 rounded-xl shadow-2xl bg-gray-800"
+        style={{
+          cursor: 'crosshair',
+          border: '2px solid rgba(255, 255, 255, 0.1)'
+        }}
+        onMouseDown={startDrawing}
+        onMouseMove={draw}
+        onMouseUp={stopDrawing}
+        onMouseLeave={stopDrawing}
+      />
+
+      {latexNodes.map((node) => (
+        <Draggable
+          key={node.id}
+          defaultPosition={node.position}
+          bounds="parent"
+        >
+          <div className="absolute p-4 bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700 cursor-move">
+            <div
+              className="text-xl font-math text-purple-400"
+              dangerouslySetInnerHTML={{ __html: node.content }}
             />
+          </div>
+        </Draggable>
+      ))}
 
-            {latexExpression.map((latex, index) => (
-                <Draggable key={index} defaultPosition={latexPosition}>
-                    <div className="absolute p-2 text-white rounded shadow-md">
-                        <div className="latex-content">{latex}</div>
-                    </div>
-                </Draggable>
+      <div className="fixed bottom-10 left-10 bg-gray-800 p-4 rounded-lg shadow-lg text-white">
+        <h3 className="text-lg font-semibold">Analysis Results</h3>
+        {results.length > 0 ? (
+          <ul>
+            {results.map((result, index) => (
+              <li key={index} className="mb-2">
+                <span className="font-bold">{result.expr}:</span> {result.result}
+              </li>
             ))}
-        </>
-    );
+          </ul>
+        ) : (
+          <p>No results available.</p>
+        )}
+      </div>
+    </div>
+  );
 }

@@ -1,20 +1,36 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 import base64
 from io import BytesIO
+from PIL import Image
 from apps.computation.utils import analyze_image
 from schema import ImageData
-from PIL import Image
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-@router.post('')
-async def run(data: ImageData):
-    image_data = base64.b64decode(data.image.split(",")[1])  # Assumes data:image/png;base64,<data>
-    image_bytes = BytesIO(image_data)
-    image = Image.open(image_bytes)
-    responses = analyze_image(image, dict_of_vars=data.dict_of_vars)
-    data = []
-    for response in responses:
-        data.append(response)
-    print('response in route: ', response)
-    return {"message": "Image processed", "data": data, "status": "success"}
+@router.post('', response_model=dict)
+async def process_image(data: ImageData):
+    try:
+        # Extract and decode image
+        image_part = data.image.split(",")[1]
+        image_data = base64.b64decode(image_part)
+        image = Image.open(BytesIO(image_data))
+        
+        # Process image
+        analysis_results = analyze_image(image, data.dict_of_vars)
+        
+        return {
+            "status": "success",
+            "data": analysis_results,
+            "message": "Analysis completed successfully"
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Processing error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
+        )
