@@ -1,3 +1,4 @@
+# route.py
 from fastapi import APIRouter, HTTPException
 import base64
 from io import BytesIO
@@ -20,6 +21,14 @@ async def process_image(data: ImageData):
         # Process image
         analysis_results = analyze_image(image, data.dict_of_vars)
         
+        if not analysis_results:
+            logger.warning("No results returned from analysis")
+            return {
+                "status": "warning",
+                "data": [],
+                "message": "Analysis completed but no results were obtained"
+            }
+        
         return {
             "status": "success",
             "data": analysis_results,
@@ -32,5 +41,9 @@ async def process_image(data: ImageData):
         logger.error(f"Processing error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Analysis failed: {str(e)}"
+            detail={
+                "error": str(e),
+                "message": "Analysis failed",
+                "type": type(e).__name__
+            }
         )
