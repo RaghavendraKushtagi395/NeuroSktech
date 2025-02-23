@@ -26,7 +26,7 @@ def detect_image_content_type(img: Image) -> str:
     model = genai.GenerativeModel(model_name="gemini-2.0-flash")
     detection_prompt = (
         "Does this image contain:\n"
-        "1. Mathematical expression/equation\n"
+        "1. Mathematical expression/equation/formula/graphical problem/\n"
         "2. Drawing/symbol/concept\n"
         "Reply with ONLY the number (1 or 2)"
     )
@@ -46,7 +46,7 @@ def analyze_image(img: Image, dict_of_vars: dict) -> List[Dict[str, Any]]:
     
     if content_type == 'math':
         prompt = (
-            "Analyze this image and return ONLY a JSON array containing the mathematical solution. "
+            "Analyze this image and return ONLY a JSON array containing the mathematical solution or if it is a graphical problem calculate the solution."
             "Format: [{\"expr\": \"expression\", \"result\": value, \"assign\": false}]\n"
             f"Available variables: {json.dumps(dict_of_vars, ensure_ascii=False)}\n"
             "Return ONLY the JSON array, no other text."

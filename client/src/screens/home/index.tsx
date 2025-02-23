@@ -6,8 +6,8 @@ import Draggable from 'react-draggable';
 import { SWATCHES } from '@/constants';
 import { toast } from 'react-hot-toast';
 import { cn } from "@/lib/utils";
-import { FaPen, FaEraser } from 'react-icons/fa'; // Added eraser and pen icons
-import LOGO from '@/assets/logo.png'
+import { FaPen, FaEraser } from 'react-icons/fa';
+import LOGO from '@/assets/logo.png';
 import { Link } from 'react-router-dom';
 import Footer from '../footer/Footer';
 
@@ -29,26 +29,37 @@ export default function Home() {
     content: string; 
     position: { x: number; y: number }
   }>>([]);
-  const [isErasing, setIsErasing] = useState(false); // Added state for erasing mode
+  const [isErasing, setIsErasing] = useState(false);
+  const [activeTool, setActiveTool] = useState<'pen' | 'eraser'>('pen');
+  const [penSize, setPenSize] = useState(3);
+  const [eraserSize, setEraserSize] = useState(20);
+  const [showPenSlider, setShowPenSlider] = useState(false);
+  const [showEraserSlider, setShowEraserSlider] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  const penTimerRef = useRef<NodeJS.Timeout>();
+  const eraserTimerRef = useRef<NodeJS.Timeout>();
 
-  useEffect(() => {
-    const initCanvas = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  // Initialize canvas
+// Update canvas initialization useEffect
+useEffect(() => {
+  const initCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight - 100;
-      ctx.lineCap = 'round';
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = color;
-    };
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - 100;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = penSize;
+    ctx.strokeStyle = color;
+  };
 
-    initCanvas();
-  }, []);
+  initCanvas();
+}, [ penSize]); // Add dependencies here
 
+  // Update canvas stroke style when color changes
   useEffect(() => {
     const ctx = canvasRef.current?.getContext('2d');
     if (ctx) {
@@ -56,6 +67,15 @@ export default function Home() {
     }
   }, [color]);
 
+  // Update canvas line width when pen size changes
+  useEffect(() => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (ctx) {
+      ctx.lineWidth = penSize;
+    }
+  }, [penSize]);
+
+  // Load MathJax script
   useEffect(() => {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_CHTML';
@@ -67,6 +87,31 @@ export default function Home() {
     };
   }, []);
 
+  // Timer cleanup
+  useEffect(() => {
+    return () => {
+      if (penTimerRef.current) clearTimeout(penTimerRef.current);
+      if (eraserTimerRef.current) clearTimeout(eraserTimerRef.current);
+    };
+  }, []);
+
+  const handlePenSliderShow = () => {
+    setShowPenSlider(true);
+    if (penTimerRef.current) clearTimeout(penTimerRef.current);
+    penTimerRef.current = setTimeout(() => {
+      setShowPenSlider(false);
+    }, 1000);
+  };
+
+  const handleEraserSliderShow = () => {
+    setShowEraserSlider(true);
+    if (eraserTimerRef.current) clearTimeout(eraserTimerRef.current);
+    eraserTimerRef.current = setTimeout(() => {
+      setShowEraserSlider(false);
+    }, 1000);
+  };
+
+  // Drawing logic
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { offsetX, offsetY } = e.nativeEvent;
     const ctx = canvasRef.current?.getContext('2d');
@@ -78,13 +123,15 @@ export default function Home() {
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
     const { offsetX, offsetY } = e.nativeEvent;
+    setCursorPosition({ x: offsetX, y: offsetY });
+    
+    if (!isDrawing) return;
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx) return;
 
     if (isErasing) {
-      ctx.clearRect(offsetX - 10, offsetY - 10, 20, 20); // Eraser logic
+      ctx.clearRect(offsetX - eraserSize / 2, offsetY - eraserSize / 2, eraserSize, eraserSize);
     } else {
       ctx.lineTo(offsetX, offsetY);
       ctx.stroke();
@@ -93,6 +140,7 @@ export default function Home() {
 
   const stopDrawing = () => setIsDrawing(false);
 
+  // Handle analysis
   const handleAnalysis = async () => {
     try {
       setIsProcessing(true);
@@ -138,6 +186,7 @@ export default function Home() {
     }
   };
 
+  // Check if canvas is empty
   const isCanvasEmpty = (canvas: HTMLCanvasElement) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return true;
@@ -145,11 +194,13 @@ export default function Home() {
     return imageData.data.every(alpha => alpha === 0);
   };
 
+  // Calculate canvas center
   const calculateCanvasCenter = () => {
     const canvas = canvasRef.current;
     return canvas ? { x: canvas.width / 2, y: canvas.height / 2 } : { x: 0, y: 0 };
   };
 
+  // Reset canvas
   const resetCanvas = () => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
@@ -162,19 +213,49 @@ export default function Home() {
     }
   };
 
+  // Handle tool selection// Handle tool selection
+const handleToolInteraction = (tool: 'pen' | 'eraser') => {
+  setActiveTool(tool);
+  setIsErasing(tool === 'eraser');
+  if (tool === 'pen') {
+    handlePenSliderShow();
+  } else {
+    handleEraserSliderShow(); // Fix the incomplete function call
+  }
+};
+
+  // Size indicator component
+  const SizeIndicator = () => {
+    const size = isErasing ? eraserSize : penSize;
+    
+    return (
+      <div 
+        className="pointer-events-none absolute border-2 border-white rounded-full"
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          left: cursorPosition.x - size / 2,
+          top: cursorPosition.y - size / 2,
+          opacity: 0.5,
+          transform: 'translate(-1px, -1px)'
+        }}
+      />
+    );
+  };
+
   return (
     <div className="relative h-screen bg-gray-900 overflow-hidden">
       <LoadingOverlay visible={isProcessing} loaderProps={{ type: 'dots' }} />
      
       <div className="fixed top-0 left-0 right-0 bg-gray-800 p-4 z-50 shadow-xl">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
-      <Link to={'/'}>
-        <img 
-      src={LOGO} 
-      className="h-14 rounded-full " // Increased size & added margin
-      alt="Logo"
-    />
-      </Link>
+          <Link to={'/'}>
+            <img 
+              src={LOGO} 
+              className="h-14 rounded-full"
+              alt="Logo"
+            />
+          </Link>
           <div className="flex gap-6">
             <Button onClick={resetCanvas} variant="destructive" className="shadow-lg">
               New Canvas
@@ -196,20 +277,72 @@ export default function Home() {
           </div>
 
           <div className="flex gap-4 items-center">
-            <Button
-              
-              onClick={() => setIsErasing(false)} // Set pen mode
-              className="flex items-center p-4 hover:ring-4 hover:ring-blue-800"
+            <div
+              className="relative tool-container"
+              onMouseEnter={() => handleToolInteraction('pen')}
             >
-              <FaPen className="text-white" size={20} />
-            </Button>
-            <Button
-              
-              onClick={() => setIsErasing(true)} // Set eraser mode
-              className="flex items-center p-4 hover:ring-4 hover:ring-blue-800"
+              <Button
+                onClick={() => handleToolInteraction('pen')}
+                className={cn(
+                  "flex items-center p-4 transition-all duration-200",
+                  activeTool === 'pen' && "ring-4 ring-blue-500"
+                )}
+              >
+                <FaPen className="text-white" size={20} />
+              </Button>
+              <div 
+                className={cn(
+                  "slider-container absolute top-12 left-1/2 transform -translate-x-1/2 bg-gray-700 p-2 rounded-lg shadow-lg transition-opacity duration-300",
+                  showPenSlider ? "opacity-100" : "opacity-0 pointer-events-none"
+                )}
+              >
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  value={penSize}
+                  onChange={(e) => {
+                    setPenSize(parseInt(e.target.value));
+                    handlePenSliderShow();
+                  }}
+                  className="w-32 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <div
+              className="relative tool-container"
+              onMouseEnter={() => handleToolInteraction('eraser')}
             >
-              <FaEraser className="text-white" size={28} />
-            </Button>
+              <Button
+                onClick={() => handleToolInteraction('eraser')}
+                className={cn(
+                  "flex items-center p-4 transition-all duration-200",
+                  activeTool === 'eraser' && "ring-4 ring-blue-500"
+                )}
+              >
+                <FaEraser className="text-white" size={28} />
+              </Button>
+              <div 
+                className={cn(
+                  "slider-container absolute top-12 left-1/2 transform -translate-x-1/2 bg-gray-700 p-2 rounded-lg shadow-lg transition-opacity duration-300",
+                  showEraserSlider ? "opacity-100" : "opacity-0 pointer-events-none"
+                )}
+              >
+                <input
+                  type="range"
+                  min="5"
+                  max="100"
+                  step="5"
+                  value={eraserSize}
+                  onChange={(e) => {
+                    setEraserSize(parseInt(e.target.value));
+                    handleEraserSliderShow();
+                  }}
+                  className="w-32 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
           </div>
 
           <Button
@@ -222,18 +355,21 @@ export default function Home() {
         </div>
       </div>
 
-      <canvas
-        ref={canvasRef}
-        className="mt-24 rounded-xl shadow-2xl bg-gray-800"
-        style={{
-          cursor: 'crosshair',
-          border: '2px solid rgba(255, 255, 255, 0.1)'
-        }}
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing}
-      />
+      <div className="relative">
+        <canvas
+          ref={canvasRef}
+          className="mt-24 rounded-xl shadow-2xl bg-gray-800"
+          style={{
+            cursor: 'crosshair',
+            border: '2px solid rgba(255, 255, 255, 0.1)'
+          }}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+        />
+        <SizeIndicator />
+      </div>
 
       {latexNodes.map((node) => (
         <Draggable
@@ -250,24 +386,24 @@ export default function Home() {
         </Draggable>
       ))}
 
-<Draggable bounds="parent">
+      <Draggable bounds="parent">
+        <div className="fixed top-28 right-28 bg-gray-800 p-4 rounded-lg shadow-lg text-white hover:cursor-move z-40">
+          <h3 className="text-lg font-semibold">Analysis Results</h3>
+          {results.length > 0 ? (
+            <ul>
+              {results.map((result, index) => (
+                <li key={index} className="mb-2 text-5xl">
+                  <span className="font-semibold">{result.expr} =</span> <span className='font-bold text-green-400'>{result.result}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No results available.</p>
+          )}
+        </div>
+      </Draggable>
 
-      <div className="fixed top-28 right-28 bg-gray-800 p-4 rounded-lg shadow-lg text-white hover:cursor-move z-40">
-        <h3 className="text-lg font-semibold">Analysis Results</h3>
-        {results.length > 0 ? (
-          <ul>
-            {results.map((result, index) => (
-              <li key={index} className="mb-2 text-5xl">
-                <span className="font-semibold ">{result.expr} =</span> <span className='font-bold text-green-400'>{result.result}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No results available.</p>
-        )}
-      </div>
-</Draggable>
-<Footer/>
+      <Footer />
     </div>
   );
 }
