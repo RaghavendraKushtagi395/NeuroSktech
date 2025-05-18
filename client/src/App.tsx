@@ -3,8 +3,8 @@ import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
 import { Toaster } from 'react-hot-toast';
 
-import Home from '@/screens/home/index.tsx';
-import Landing from '@/screens/landing/LandingPage.tsx';
+import Home from '@/screens/home/index';
+import Landing from '@/screens/landing/LandingPage';
 import '@/index.css';
 
 const paths = [
